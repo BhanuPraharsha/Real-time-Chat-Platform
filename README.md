@@ -137,6 +137,3 @@ The server will display your network IP when it starts.
 - XSS protection with DOMPurify
 - CORS configured
 
-## License
-
-MIT
