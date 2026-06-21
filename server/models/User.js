@@ -23,6 +23,15 @@ const UserSchema = new mongoose.Schema({
     required: [true, 'Password is required'],
     minlength: [6, 'Password must be at least 6 characters']
   },
+  avatar: {
+    type: String,
+    default: ''
+  },
+  bio: {
+    type: String,
+    maxlength: [150, 'Bio cannot exceed 150 characters'],
+    default: ''
+  },
   createdAt: {
     type: Date,
     default: Date.now

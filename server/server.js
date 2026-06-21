@@ -10,6 +10,9 @@ require('dotenv').config();
 const Message = require('./models/Message');
 const User = require('./models/User');
 const authRoutes = require('./routes/authRoutes');
+const userRoutes = require('./routes/userRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+const path = require('path');
 
 const app = express();
 
@@ -17,7 +20,11 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/upload', uploadRoutes);
 
 const server = http.createServer(app);
 
@@ -69,6 +76,30 @@ io.on('connection', (socket) => {
 
     io.emit('online_users', Array.from(onlineUsers.values()));
 
+    // Fetch recent chats for the connected user
+    const fetchRecentChats = async () => {
+        try {
+            const userId = socket.user._id;
+            const sentMessages = await Message.find({ messageType: 'private', userId }).distinct('recipientId');
+            const receivedMessages = await Message.find({ messageType: 'private', recipientId: userId }).distinct('userId');
+            
+            const allPartnerIds = [...new Set([...sentMessages, ...receivedMessages].map(id => id.toString()))];
+            
+            const recentChatUsers = await User.find({
+                _id: { $in: allPartnerIds }
+            }).select('_id username email');
+            
+            socket.emit('recent_chats', recentChatUsers.map(u => ({
+                userId: u._id.toString(),
+                username: u.username,
+                email: u.email
+            })));
+        } catch (error) {
+            console.error('Error fetching recent chats:', error);
+        }
+    };
+    fetchRecentChats();
+
     socket.on('join_room', async (room) => {
         try {
             socket.join(room);
@@ -86,6 +117,9 @@ io.on('connection', (socket) => {
                 room: msg.room,
                 author: msg.author,
                 message: msg.message,
+                fileUrl: msg.fileUrl,
+                fileType: msg.fileType,
+                fileName: msg.fileName,
                 time: new Date(msg.createdAt).toLocaleTimeString('en-US', {
                     hour: '2-digit',
                     minute: '2-digit'
@@ -107,10 +141,13 @@ io.on('connection', (socket) => {
 
     socket.on('send_message', async (data) => {
         try {
-            const sanitizedMessage = validator.escape(data.message.trim());
+            const sanitizedMessage = data.message ? validator.escape(data.message.trim()) : '';
 
-            if (!sanitizedMessage || sanitizedMessage.length === 0) {
-                return socket.emit('error', { message: 'Message cannot be empty' });
+            const hasMessage = sanitizedMessage.length > 0;
+            const hasFile = data.fileUrl && data.fileUrl.trim().length > 0;
+
+            if (!hasMessage && !hasFile) {
+                return socket.emit('error', { message: 'Message or file cannot be empty' });
             }
 
             if (sanitizedMessage.length > 2000) {
@@ -122,6 +159,9 @@ io.on('connection', (socket) => {
                 author: socket.user.username,
                 userId: socket.user._id,
                 message: sanitizedMessage,
+                fileUrl: data.fileUrl || null,
+                fileType: data.fileType || null,
+                fileName: data.fileName || null,
                 messageType: 'public',
                 time: new Date().toLocaleTimeString('en-US', {
                     hour: '2-digit',
@@ -134,6 +174,9 @@ io.on('connection', (socket) => {
                 author: messageData.author,
                 userId: messageData.userId,
                 message: messageData.message,
+                fileUrl: messageData.fileUrl,
+                fileType: messageData.fileType,
+                fileName: messageData.fileName,
                 messageType: 'public'
             });
 
@@ -148,24 +191,26 @@ io.on('connection', (socket) => {
 
     socket.on('send_private_message', async (data) => {
         try {
-            const sanitizedMessage = validator.escape(data.message.trim());
+            const sanitizedMessage = data.message ? validator.escape(data.message.trim()) : '';
 
-            if (!sanitizedMessage || sanitizedMessage.length === 0) {
-                return socket.emit('error', { message: 'Message cannot be empty' });
+            const hasMessage = sanitizedMessage.length > 0;
+            const hasFile = data.fileUrl && data.fileUrl.trim().length > 0;
+
+            if (!hasMessage && !hasFile) {
+                return socket.emit('error', { message: 'Message or file cannot be empty' });
             }
 
             const recipientSocket = Array.from(onlineUsers.entries())
                 .find(([_, user]) => user.userId === data.recipientId);
-
-            if (!recipientSocket) {
-                return socket.emit('error', { message: 'Recipient is not online' });
-            }
 
             const messageData = {
                 author: socket.user.username,
                 userId: socket.user._id.toString(),
                 recipientId: data.recipientId,
                 message: sanitizedMessage,
+                fileUrl: data.fileUrl || null,
+                fileType: data.fileType || null,
+                fileName: data.fileName || null,
                 messageType: 'private',
                 time: new Date().toLocaleTimeString('en-US', {
                     hour: '2-digit',
@@ -178,13 +223,18 @@ io.on('connection', (socket) => {
                 author: messageData.author,
                 userId: socket.user._id,
                 message: messageData.message,
+                fileUrl: messageData.fileUrl,
+                fileType: messageData.fileType,
+                fileName: messageData.fileName,
                 messageType: 'private',
                 recipientId: data.recipientId
             });
 
             await newMessage.save();
 
-            io.to(recipientSocket[0]).emit('receive_private_message', messageData);
+            if (recipientSocket) {
+                io.to(recipientSocket[0]).emit('receive_private_message', messageData);
+            }
             socket.emit('private_message_sent', messageData);
 
         } catch (error) {
@@ -198,6 +248,52 @@ io.on('connection', (socket) => {
             username: socket.user.username,
             isTyping: data.isTyping
         });
+    });
+
+    socket.on('fetch_private_history', async (data) => {
+        const { recipientId, page = 1, limit = 50 } = data;
+        const skip = (page - 1) * limit;
+
+        try {
+            const messages = await Message.find({
+                messageType: 'private',
+                $or: [
+                    { userId: socket.user._id, recipientId: recipientId },
+                    { userId: recipientId, recipientId: socket.user._id }
+                ]
+            })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+            const formattedMessages = messages.reverse().map(msg => ({
+                author: msg.author,
+                userId: msg.userId.toString(),
+                recipientId: msg.recipientId.toString(),
+                message: msg.message,
+                fileUrl: msg.fileUrl,
+                fileType: msg.fileType,
+                fileName: msg.fileName,
+                messageType: 'private',
+                time: new Date(msg.createdAt).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }),
+                createdAt: msg.createdAt,
+                isSender: msg.userId.toString() === socket.user._id.toString()
+            }));
+
+            socket.emit('load_private_messages', {
+                recipientId,
+                messages: formattedMessages,
+                page,
+                hasMore: messages.length === limit
+            });
+        } catch (error) {
+            console.error('Error fetching private history:', error);
+            socket.emit('error', { message: 'Failed to load chat history' });
+        }
     });
 
     socket.on('disconnect', () => {

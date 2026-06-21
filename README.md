@@ -1,139 +1,145 @@
 # Real-Time Chat Platform
 
-A web-based chat application with real-time messaging, user authentication, and private messaging capabilities.
+A comprehensive Full-Stack real-time chat platform engineered end-to-end with the MERN stack. This project showcases a robust backend architecture featuring secure RESTful APIs and bidirectional WebSocket data flow, seamlessly integrated with a highly responsive, state-driven React frontend.
 
-## Features
+## ✨ Features
 
-- User registration and login with JWT authentication
-- Real-time public chat rooms
-- Private messaging between users
-- Online user list
-- Typing indicators
-- Message history
-- Input sanitization for security
+**Core Functionality**
+- **Secure JWT Authentication** - Complete user registration/login with Socket.IO JWT verification
+- **Real-time Messaging** - Instant messaging with authenticated Socket.IO connections (Public Rooms & Private DMs)
+- **Media Support** - File and image uploads with strict validation (25MB limit)
+- **Profile Management** - Profile updates with avatar URL and bio
+- **Real-time Presence** - Authenticated user online/offline status with secure socket tracking
 
-## Tech Stack 
+**Advanced Features**
+- **Message History Pagination** - Efficient historical message loading to reduce database load
+- **Rich UI Components** - Fully responsive, minimal dark-mode-first interface using custom CSS variables
+- **Optimized Storage** - DiskStorage using `multer` with secure static file serving
 
-**Backend:**
-- Node.js & Express
-- Socket.io for real-time communication
-- MongoDB with Mongoose
-- JWT for authentication
-- Bcrypt for password hashing
+## 🛠 Tech Stack
 
-**Frontend:**
-- React
-- Socket.io Client
-- React Router
-- Axios
-- DOMPurify for XSS prevention
+- **Frontend:** React + Vite + CSS
+- **Backend:** Node.js + Express + Socket.IO
+- **Database:** MongoDB with Mongoose ODM
+- **Authentication:** JWT with bcryptjs
+- **File Upload:** Multer
 
-## Installation
+## ✅ Recent Security & Performance Improvements
 
-### Prerequisites
-- Node.js (v14 or higher)
-- MongoDB (local or MongoDB Atlas)
+**Enhancements (Recently Fixed)**
+- ✅ **Socket Authentication Secured** - JWT verification in Socket.IO middleware with database user validation. Every socket connection is validated against JWT + database, ensuring only logged-in users participate.
+- ✅ **Enhanced File Upload Security** - Comprehensive server-side validation (25MB limit) ensuring stability against large payload attacks.
+- ✅ **DiskStorage Implementation** - Standardized `multer` disk storage for better memory management during high-throughput file sharing.
+- ✅ **XSS Prevention** - Client-side message sanitization using `DOMPurify` to mitigate cross-site scripting vulnerabilities.
 
-### Setup
 
-1. Clone the repository
-```bash
-git clone <repository-url>
-cd Real-time-Chat-Platform
+
+## 📁 Project Structure
+
+```text
+Real-time-Chat-Platform/
+├── README.md                    # This file
+├── server/                      # Node.js/Express backend
+│   ├── server.js                # Main server file with Socket.IO initialization
+│   ├── package.json             # Backend dependencies
+│   ├── models/                  # MongoDB Mongoose schemas
+│   │   ├── Message.js           
+│   │   └── User.js              
+│   ├── middleware/              # Express middlewares
+│   │   └── authMiddleware.js    # JWT verification
+│   └── routes/                  # REST API routes
+│       ├── authRoutes.js        
+│       ├── uploadRoutes.js      
+│       └── userRoutes.js        
+└── client/                      # React frontend
+    ├── package.json             # Frontend dependencies
+    ├── vite.config.js           # Vite configuration
+    ├── index.html               # Main HTML entry
+    └── src/
+        ├── App.jsx              # Main app component & routing
+        ├── Chat.jsx             # Core Socket.IO chat interface
+        ├── components/          # Reusable UI components
+        │   ├── Login.jsx        
+        │   ├── Register.jsx     
+        │   ├── Profile.jsx      
+        │   └── UserList.jsx     
+        └── styles/              # Scoped CSS styles
+            ├── Auth.css         
+            ├── Chat.css         
+            └── Profile.css      
 ```
 
-2. Install server dependencies
+## 🔌 API Endpoints
+
+**Authentication**
+- `POST /api/auth/register` - Register new user
+- `POST /api/auth/login` - Login user
+
+**User Management (Protected)**
+- `GET /api/users/profile` - Get current user profile
+- `PUT /api/users/profile` - Update profile bio and avatar
+
+**Uploads (Protected)**
+- `POST /api/upload` - Upload media file (multipart/form-data)
+
+*Note: Protected endpoints require `Authorization: Bearer <token>` header.*
+
+## 🚀 Installation & Setup
+
+### Backend Setup
+Navigate to the server directory and install dependencies:
 ```bash
 cd server
 npm install
 ```
 
-3. Install client dependencies
+Create a `.env` file in the `server` directory:
+```env
+# Server Configuration
+PORT=5000
+
+# Database
+MONGO_URI=mongodb://localhost:27017/chatapp
+
+# JWT Configuration
+JWT_SECRET=your_super_secret_jwt_key
+```
+
+Start the backend server:
+```bash
+npm start
+```
+
+### Frontend Setup
+Navigate to the client directory and install dependencies:
 ```bash
 cd ../client
 npm install
 ```
 
-4. Configure environment variables
-
-Create `server/.env`:
-```
-MONGO_URI=mongodb://localhost:27017/chatapp
-JWT_SECRET=your_secret_key_here
-PORT=5000
+Create a `.env` file in the `client` directory:
+```env
+# Backend Connection
+VITE_API_URL=http://localhost:5000
+VITE_SOCKET_URL=http://localhost:5000
 ```
 
-Create `client/.env`:
-```
-REACT_APP_API_URL=http://localhost:5000
-REACT_APP_SOCKET_URL=http://localhost:5000
-```
-
-## Running the Application
-
-### Start the server
+Start the development server:
 ```bash
-cd server
-npm start
+npm run dev
 ```
 
-### Start the client
-```bash
-cd client
-npm start
-```
+## 🤝 Contributing
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Commit changes: `git commit -m 'Add feature'`
+4. Push to branch: `git push origin feature-name`
+5. Submit a pull request
 
-The application will be available at `http://localhost:3000`
+## 📄 License
+This project is licensed under the MIT License.
 
-## Network Access
-
-To allow others on your network to connect:
-
-1. Update `client/.env` with your IP address:
-```
-REACT_APP_API_URL=http://YOUR_IP:5000
-REACT_APP_SOCKET_URL=http://YOUR_IP:5000
-```
-
-2. Restart the client
-
-3. Share `http://YOUR_IP:3000` with others
-
-The server will display your network IP when it starts.
-
-## API Endpoints
-
-### Authentication
-
-**POST** `/api/auth/register`
-- Body: `{ username, email, password }`
-- Returns: `{ token, user }`
-
-**POST** `/api/auth/login`
-- Body: `{ email, password }`
-- Returns: `{ token, user }`
-
-## Socket Events
-
-### Client to Server
-- `join_room` - Join a chat room
-- `send_message` - Send public message
-- `send_private_message` - Send private message
-- `typing` - Typing indicator
-
-### Server to Client
-- `load_messages` - Message history
-- `receive_message` - New public message
-- `receive_private_message` - New private message
-- `online_users` - Updated user list
-- `user_joined` - User joined notification
-- `user_typing` - Typing indicator
-
-## Security
-
-- Passwords hashed with bcrypt
-- JWT token authentication
-- Input sanitization (server and client)
-- XSS protection with DOMPurify
-- CORS configured
-
+## 🙏 Acknowledgments
+- Socket.IO for secure real-time communication
+- Multer for efficient file upload handling
+- The React and Node.js communities for excellent tooling
